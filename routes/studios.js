@@ -117,5 +117,41 @@ router.post('/google-add', async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 });
+// Get My Listings for Google Users (via proxy)
+router.get('/google-my-listings', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(401).json({ message: 'Email required' });
+
+    const db = await connectDB();
+    const studios = await db.collection('studios')
+      .find({ ownerEmail: email })
+      .toArray();
+    res.status(200).json(studios);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+});
+
+// Delete Studio for Google Users (via proxy)
+router.delete('/google-delete/:id', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(401).json({ message: 'Email required' });
+
+    const db = await connectDB();
+    const result = await db.collection('studios').deleteOne(
+      { _id: new ObjectId(req.params.id), ownerEmail: email }
+    );
+
+    if (result.deletedCount === 0) {
+      return res.status(403).json({ message: 'Unauthorized or Studio not found' });
+    }
+
+    res.status(200).json({ message: 'Studio deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+});
 
 module.exports = router;
