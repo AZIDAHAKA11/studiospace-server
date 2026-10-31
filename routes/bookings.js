@@ -101,5 +101,45 @@ router.patch('/:id/cancel', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 });
+// 5. Get Bookings for Google Users (via proxy)
+router.get('/google-my-bookings', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(401).json({ message: 'Email required' });
+
+    const db = await connectDB();
+    const bookings = await db.collection('bookings')
+      .find({ userEmail: email })
+      .sort({ createdAt: -1 })
+      .toArray();
+    res.status(200).json(bookings);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+});
+
+// 6. Cancel Booking for Google Users (via proxy)
+router.patch('/google-cancel/:id', async (req, res) => {
+  try {
+    const { userEmail } = req.body;
+    if (!userEmail) return res.status(401).json({ message: 'Unauthorized' });
+
+    const db = await connectDB();
+    const bookingId = req.params.id;
+
+    const result = await db.collection('bookings').updateOne(
+      { _id: new ObjectId(bookingId), userEmail: userEmail },
+      { $set: { status: 'Cancelled' } }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(400).json({ message: 'Booking not found or unauthorized' });
+    }
+
+    res.status(200).json({ message: 'Booking cancelled successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+});
 
 module.exports = router;
