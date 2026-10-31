@@ -5,37 +5,26 @@ const verifyToken = require('../middleware/verifyToken');
 
 const router = express.Router();
 
-// 1. Create a Booking (With Double-Booking Prevention)
+// 1. Create a Booking (For Email/Password Users)
 router.post('/', verifyToken, async (req, res) => {
   try {
     const { studioId, date, startTime, endTime, totalPrice } = req.body;
     const db = await connectDB();
 
-   
     const existingBooking = await db.collection('bookings').findOne({
-      studioId,
-      date,
-      status: { $in: ['Pending', 'Confirmed'] }, 
+      studioId, date,
+      status: { $in: ['Pending', 'Confirmed'] },
       startTime: { $lt: endTime },
       endTime: { $gt: startTime }
     });
 
     if (existingBooking) {
-      return res.status(400).json({ 
-        message: "This time slot is already booked. Please select a different time." 
-      });
+      return res.status(400).json({ message: "This time slot is already booked. Please select a different time." });
     }
 
     const newBooking = {
-      studioId,
-      userEmail: req.user.email,
-      userName: req.user.name,
-      date,
-      startTime,
-      endTime,
-      totalPrice,
-      status: 'Pending',
-      createdAt: new Date()
+      studioId, userEmail: req.user.email, userName: req.user.name,
+      date, startTime, endTime, totalPrice, status: 'Pending', createdAt: new Date()
     };
 
     const result = await db.collection('bookings').insertOne(newBooking);
@@ -46,7 +35,39 @@ router.post('/', verifyToken, async (req, res) => {
   }
 });
 
-// 2. Get My Bookings
+// 2. Create a Booking (For Google Login Users - Called via Next.js Proxy)
+router.post('/google-booking', async (req, res) => {
+  try {
+    const { studioId, date, startTime, endTime, totalPrice, userEmail, userName } = req.body;
+    if (!userEmail) return res.status(401).json({ message: 'Unauthorized' });
+
+    const db = await connectDB();
+
+    const existingBooking = await db.collection('bookings').findOne({
+      studioId, date,
+      status: { $in: ['Pending', 'Confirmed'] },
+      startTime: { $lt: endTime },
+      endTime: { $gt: startTime }
+    });
+
+    if (existingBooking) {
+      return res.status(400).json({ message: "This time slot is already booked. Please select a different time." });
+    }
+
+    const newBooking = {
+      studioId, userEmail, userName,
+      date, startTime, endTime, totalPrice, status: 'Pending', createdAt: new Date()
+    };
+
+    const result = await db.collection('bookings').insertOne(newBooking);
+    res.status(201).json({ message: 'Booking requested successfully', bookingId: result.insertedId });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+});
+
+// 3. Get My Bookings
 router.get('/my-bookings', verifyToken, async (req, res) => {
   try {
     const db = await connectDB();
@@ -60,13 +81,12 @@ router.get('/my-bookings', verifyToken, async (req, res) => {
   }
 });
 
-// 3. Cancel a Booking
+// 4. Cancel a Booking
 router.patch('/:id/cancel', verifyToken, async (req, res) => {
   try {
     const db = await connectDB();
     const bookingId = req.params.id;
 
-    
     const result = await db.collection('bookings').updateOne(
       { _id: new ObjectId(bookingId), userEmail: req.user.email },
       { $set: { status: 'Cancelled' } }
