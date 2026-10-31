@@ -11,7 +11,7 @@ router.post('/register', async (req, res) => {
     const { name, email, photoURL, password } = req.body;
     const db = await connectDB();
 
-    // চেক করা ইউজার আগে থেকেই আছে কি না
+   
     const existingUser = await db.collection('users').findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists with this email' });
@@ -43,30 +43,30 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     const db = await connectDB();
 
-    // ইউজার খোঁজা
+  
     const user = await db.collection('users').findOne({ email });
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // পাসওয়ার্ড মেলানো
+   
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // JWT টোকেন তৈরি করা
+   
     const token = jwt.sign(
       { id: user._id, email: user.email, name: user.name }, 
       process.env.JWT_SECRET, 
       { expiresIn: '7d' }
     );
 
-    // Challenge 1: HTTPOnly Cookie তে টোকেন সেভ করা
+    
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Production এ true হবে
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: true, 
+      sameSite: 'none', 
       maxAge: 7 * 24 * 60 * 60 * 1000 // ৭ দিন
     });
 
@@ -80,12 +80,38 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// 3. Logout
+// 3. Get Current User (Check if logged in)
+router.get('/me', async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const db = await connectDB();
+
+    const user = await db.collection('users').findOne(
+      { email: decoded.email },
+      { projection: { password: 0 } }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(401).json({ message: 'Invalid token' });
+  }
+});
+
+// 4. Logout
 router.post('/logout', (req, res) => {
   res.clearCookie('token', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: true,
+    sameSite: 'none',
   });
   res.status(200).json({ message: 'Logged out successfully' });
 });
