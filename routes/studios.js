@@ -103,5 +103,19 @@ router.delete('/:id', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 });
+// Add Studio for Google Users (via Next.js Proxy)
+router.post('/google-add', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const studio = {
+      ...req.body,
+      createdAt: new Date()
+    };
+    const result = await db.collection('studios').insertOne(studio);
+    res.status(201).json({ message: 'Studio added successfully', insertedId: result.insertedId });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+});
 
 module.exports = router;
